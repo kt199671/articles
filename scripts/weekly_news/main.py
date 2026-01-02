@@ -7,9 +7,8 @@ import argparse
 from datetime import datetime
 from pathlib import Path
 
-from .config import MAGAZINE_PATH, WEEK_FORMAT, MAX_RETRIES, RETRY_DELAY, LOG_FORMAT, LOG_LEVEL
+from .config import MAGAZINE_PATH, WEEK_FORMAT, LOG_FORMAT, LOG_LEVEL
 from .researcher import CoworkingResearcher
-from .note_api import NoteAPIClient, LoginError, NoteAPIError
 
 
 # Setup logging
@@ -88,8 +87,6 @@ def validate_environment() -> None:
     required_vars = [
         "GEMINI_API_KEY",
         "TAVILY_API_KEY",
-        "NOTE_EMAIL",
-        "NOTE_PASSWORD",
     ]
 
     missing_vars = [var for var in required_vars if not os.getenv(var)]
@@ -102,12 +99,9 @@ def validate_environment() -> None:
     logger.info("Environment validation passed")
 
 
-def main(dry_run: bool = False) -> int:
+def main() -> int:
     """
     Main workflow orchestrator.
-
-    Args:
-        dry_run: If True, skip note.com publishing
 
     Returns:
         Exit code (0 for success, 1 for failure)
@@ -175,40 +169,10 @@ def main(dry_run: bool = False) -> int:
         logger.info("Step 4: Saving markdown file...")
         save_markdown(output_path, article_md)
 
-        # 8. Publish to note.com (unless dry run)
-        if dry_run:
-            logger.info("Dry run mode: Skipping note.com publishing")
-            logger.info("Article saved successfully!")
-            return 0
-
-        logger.info("Step 5: Publishing to note.com...")
-
-        magazine_id = os.getenv("NOTE_MAGAZINE_ID")
-        if not magazine_id:
-            logger.warning("NOTE_MAGAZINE_ID not set, creating draft without magazine")
-
-        note_client = NoteAPIClient()
-
-        try:
-            draft_url = note_client.create_draft(
-                title=f"週刊コワーキングスペース {week_number}",
-                content_markdown=article_md,
-                magazine_id=magazine_id
-            )
-
-            logger.info(f"Draft created successfully: {draft_url}")
-
-        except LoginError as e:
-            raise FatalError(f"note.com login failed: {e}")
-
-        except NoteAPIError as e:
-            raise RetryableError(f"note.com API error: {e}")
-
-        # 9. Success
+        # 8. Success
         logger.info("=" * 60)
         logger.info("SUCCESS!")
-        logger.info(f"Article: {output_path}")
-        logger.info(f"Draft URL: {draft_url}")
+        logger.info(f"Article saved: {output_path}")
         logger.info("=" * 60)
 
         return 0
@@ -234,15 +198,10 @@ def cli():
     parser = argparse.ArgumentParser(
         description="Weekly Coworking Space News Automation"
     )
-    parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="Skip note.com publishing (local file only)"
-    )
 
     args = parser.parse_args()
 
-    exit_code = main(dry_run=args.dry_run)
+    exit_code = main()
     sys.exit(exit_code)
 
 

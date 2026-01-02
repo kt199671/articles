@@ -27,11 +27,6 @@ jobs:
           cache: 'pip'
           cache-dependency-path: 'scripts/requirements.txt'
 
-      - name: Set up Chrome
-        uses: browser-actions/setup-chrome@v1
-        with:
-          chrome-version: stable
-
       - name: Install dependencies
         run: |
           pip install -r scripts/requirements.txt
@@ -45,10 +40,6 @@ jobs:
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
-          NOTE_EMAIL: ${{ secrets.NOTE_EMAIL }}
-          NOTE_PASSWORD: ${{ secrets.NOTE_PASSWORD }}
-          NOTE_MAGAZINE_ID: ${{ secrets.NOTE_MAGAZINE_ID }}
-          PYTHON_ENV: production
         run: |
           python -m scripts.weekly_news.main
 
