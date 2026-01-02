@@ -1,0 +1,70 @@
+name: Weekly Coworking Research Lab
+
+on:
+  schedule:
+    # Runs every Wednesday at 00:00 UTC (09:00 JST)
+    - cron: '0 0 * * 3'
+  workflow_dispatch:  # Manual trigger for testing
+
+permissions:
+  contents: write  # Required for committing generated articles
+
+jobs:
+  generate-research-article:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: 'scripts/requirements.txt'
+
+      - name: Install dependencies
+        run: |
+          pip install -r scripts/requirements.txt
+
+      - name: Configure git
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+
+      - name: Generate research article
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
+        run: |
+          python -m scripts.research_lab.main
+
+      - name: Commit and push changes
+        run: |
+          git add note/magazine/コワーキングの場づくり研究室/
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            WEEK_NUM=$(python -c "from datetime import datetime; print(datetime.now().strftime('%Y年%V週'))")
+            git commit -m "feat: add research lab article for ${WEEK_NUM}
+
+            🤖 Generated with GitHub Actions
+
+            Co-Authored-By: GitHub Actions <github-actions[bot]@users.noreply.github.com>"
+            git push
+          fi
+
+      - name: Upload failure logs (if failed)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: error-logs-${{ github.run_id }}
+          path: |
+            scripts/research_lab/*.log
+            *.log
+          retention-days: 7
+          if-no-files-found: ignore

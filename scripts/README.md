@@ -1,12 +1,25 @@
-# Weekly Coworking Space News Automation
+# Coworking Space Article Automation
 
-毎週金曜日に自動実行され、コワーキングスペースの最新ニュースを調査・執筆する GitHub Actions ベースの完全自動化システムです。
+GitHub Actions ベースの完全自動化システムで、コワーキングスペースに関する記事を自動生成します。
+
+## 🤖 自動化システム
+
+### 1. 週刊コワーキングスペース（毎週金曜日）
+最新ニュースをまとめた週刊記事を自動生成
+
+### 2. コワーキングの場づくり研究室（毎週水曜日）
+学術的な研究記事を自動生成
 
 ## 📁 ディレクトリ構成
 
 ```
 scripts/
-├── weekly_news/
+├── weekly_news/             # 週刊ニュース記事生成
+│   ├── __init__.py
+│   ├── main.py              # メインオーケストレーター
+│   ├── researcher.py        # AI リサーチ・執筆モジュール
+│   └── config.py            # 設定定数
+├── research_lab/            # 研究室記事生成
 │   ├── __init__.py
 │   ├── main.py              # メインオーケストレーター
 │   ├── researcher.py        # AI リサーチ・執筆モジュール
@@ -67,17 +80,29 @@ export TAVILY_API_KEY="tvly-..."
 ### 実行
 
 ```bash
-# 記事生成
+# 週刊ニュース記事生成
 python -m scripts.weekly_news.main
+
+# 研究室記事生成
+python -m scripts.research_lab.main
 ```
 
 ## 📅 自動実行スケジュール
 
+### 週刊コワーキングスペース
 - **実行日時**: 毎週金曜日 9:00 JST (00:00 UTC)
 - **実行内容**:
   1. 過去7日間のコワーキングスペース関連ニュースを Tavily で検索
-  2. Google Gemini 2.0 Flash で 1,500-2,500文字の記事を生成
+  2. Google Gemini 3.0 Flash で 1,500-2,500文字のニュース記事を生成
   3. Markdown ファイルを `note/magazine/週刊コワーキングスペース/` に保存
+  4. 変更を Git にコミット & プッシュ
+
+### コワーキングの場づくり研究室
+- **実行日時**: 毎週水曜日 9:00 JST (00:00 UTC)
+- **実行内容**:
+  1. 過去30日間のコワーキングスペース関連研究・トレンドを Tavily で検索
+  2. Google Gemini 3.0 Flash で 5,000-8,000文字の学術的記事を生成
+  3. Markdown ファイルを `note/magazine/コワーキングの場づくり研究室/` に保存
   4. 変更を Git にコミット & プッシュ
 
 ## 🔧 トラブルシューティング
@@ -90,7 +115,7 @@ python -m scripts.weekly_news.main
 ### 検索結果なし
 
 - Tavily のステータスを確認
-- `scripts/weekly_news/config.py` の `SEARCH_QUERIES` を調整
+- `scripts/weekly_news/config.py` または `scripts/research_lab/config.py` の `SEARCH_QUERIES` を調整
 
 ### 重複記事エラー
 
@@ -100,11 +125,14 @@ python -m scripts.weekly_news.main
 
 ## 📊 コスト見積もり
 
-- **Google Gemini 2.0 Flash**: **無料** (2026年1月時点)
-- **Tavily**: 週約 $0.020
-- **合計**: 週約 $0.020 = **年間約 $1.04**
+- **Google Gemini 3.0 Flash**: **無料** (2026年1月時点)
+- **Tavily**:
+  - 週刊ニュース: 週約 $0.020
+  - 研究室: 週約 $0.028
+  - 合計: 週約 $0.048
+- **合計**: 週約 $0.048 = **年間約 $2.50**
 
-※Gemini 2.0 Flash は現在無料で提供されています。将来的に有料化される可能性があります。
+※Gemini 3.0 Flash は現在無料で提供されています。将来的に有料化される可能性があります。
 
 ## 🔐 セキュリティ
 
