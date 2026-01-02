@@ -86,7 +86,7 @@ def validate_environment() -> None:
         FatalError: If required environment variables are missing
     """
     required_vars = [
-        "OPENAI_API_KEY",
+        "GEMINI_API_KEY",
         "TAVILY_API_KEY",
         "NOTE_EMAIL",
         "NOTE_PASSWORD",

@@ -22,7 +22,7 @@ WEEK_FORMAT = "%Y年%V週"  # e.g., "2026年01週"
 # API timeouts (seconds)
 TAVILY_TIMEOUT = 30
 NOTE_API_TIMEOUT = 30
-OPENAI_TIMEOUT = 60
+GEMINI_TIMEOUT = 60
 
 # Retry configuration
 MAX_RETRIES = 3

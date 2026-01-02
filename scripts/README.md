@@ -27,10 +27,10 @@ scripts/
 
 ### 2. API キーの取得
 
-#### OpenAI API キー
-1. [OpenAI API Keys](https://platform.openai.com/api-keys) にアクセス
-2. 新しい API キーを作成
-3. コピーして保管
+#### Google Gemini API キー
+1. [Google AI Studio](https://aistudio.google.com/app/apikey) にアクセス
+2. "Create API Key" をクリック
+3. API キーをコピーして保管
 
 #### Tavily API キー
 1. [Tavily](https://tavily.com) にサインアップ
@@ -43,7 +43,7 @@ scripts/
 
 | Secret 名 | 説明 | 例 |
 |-----------|------|-----|
-| `OPENAI_API_KEY` | OpenAI API キー | `sk-...` |
+| `GEMINI_API_KEY` | Google Gemini API キー | `AIza...` |
 | `TAVILY_API_KEY` | Tavily API キー | `tvly-...` |
 | `NOTE_EMAIL` | note.com ログインメール | `your-email@example.com` |
 | `NOTE_PASSWORD` | note.com ログインパスワード | `your-password` |
@@ -71,7 +71,7 @@ pip install -r scripts/requirements.txt
 ### 環境変数設定
 
 ```bash
-export OPENAI_API_KEY="sk-..."
+export GEMINI_API_KEY="AIza..."
 export TAVILY_API_KEY="tvly-..."
 export NOTE_EMAIL="your-email@example.com"
 export NOTE_PASSWORD="your-password"
@@ -127,9 +127,11 @@ python -m scripts.weekly_news.main
 
 ## 📊 コスト見積もり
 
-- **OpenAI (GPT-4 Turbo)**: 週約 $0.045
+- **Google Gemini 2.0 Flash**: **無料** (2026年1月時点)
 - **Tavily**: 週約 $0.020
-- **合計**: 週約 $0.065 = **年間約 $3.38**
+- **合計**: 週約 $0.020 = **年間約 $1.04**
+
+※Gemini 2.0 Flash は現在無料で提供されています。将来的に有料化される可能性があります。
 
 ## 🔐 セキュリティ
 

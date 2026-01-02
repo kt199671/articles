@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 from typing import List, Dict, Any
 from dataclasses import dataclass
 
-from openai import OpenAI
+import google.generativeai as genai
 from tavily import TavilyClient
 
 from .config import (
@@ -15,7 +15,7 @@ from .config import (
     TARGET_CHAR_COUNT_MAX,
     NEWS_ITEMS_MIN,
     NEWS_ITEMS_MAX,
-    OPENAI_TIMEOUT,
+    GEMINI_TIMEOUT,
     TAVILY_TIMEOUT,
 )
 
@@ -53,15 +53,14 @@ class CoworkingResearcher:
     """
     AI-powered researcher for coworking space industry trends.
 
-    Uses Tavily for web search and OpenAI GPT-4 for article generation.
+    Uses Tavily for web search and Google Gemini for article generation.
     """
 
     def __init__(self):
         """Initialize researcher with API clients."""
-        self.openai_client = OpenAI(
-            api_key=os.getenv("OPENAI_API_KEY"),
-            timeout=OPENAI_TIMEOUT
-        )
+        # Configure Gemini
+        genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+        self.gemini_model = genai.GenerativeModel('gemini-2.0-flash-exp')
 
         self.tavily_client = TavilyClient(
             api_key=os.getenv("TAVILY_API_KEY")
@@ -146,7 +145,7 @@ class CoworkingResearcher:
 
     def generate_article(self, research_data: ResearchData, week_number: str) -> str:
         """
-        Generate article using OpenAI GPT-4 based on research data.
+        Generate article using Google Gemini based on research data.
 
         Args:
             research_data: Research data from gather_weekly_trends
@@ -155,9 +154,9 @@ class CoworkingResearcher:
         Returns:
             Article text in markdown format
         """
-        logger.info("Generating article with OpenAI GPT-4...")
+        logger.info("Generating article with Google Gemini 2.0 Flash...")
 
-        system_prompt = f"""あなたはコワーキングスペース業界の週刊ニュースライターです。
+        prompt = f"""あなたはコワーキングスペース業界の週刊ニュースライターです。
 最新の業界トレンドを3-5個のニュース項目にまとめ、簡潔で読みやすいニュースダイジェストを作成してください。
 
 【記事の要件】
@@ -178,9 +177,10 @@ class CoworkingResearcher:
 - ニュース項目は重要度順に並べてください
 - 日本語と英語のニュースをバランスよく含めてください
 - 出典URLは必ず含めてください
-"""
 
-        user_prompt = f"""{week_number}の週刊コワーキングスペースニュースを作成してください。
+---
+
+{week_number}の週刊コワーキングスペースニュースを作成してください。
 
 以下のリサーチデータを基に、重要度の高い3-5個のニュースを選定し、記事を執筆してください。
 
@@ -193,17 +193,15 @@ class CoworkingResearcher:
 """
 
         try:
-            response = self.openai_client.chat.completions.create(
-                model="gpt-4-turbo-preview",
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt}
-                ],
-                temperature=0.7,
-                max_tokens=3000
+            response = self.gemini_model.generate_content(
+                prompt,
+                generation_config={
+                    "temperature": 0.7,
+                    "max_output_tokens": 3000,
+                }
             )
 
-            article = response.choices[0].message.content
+            article = response.text
 
             logger.info(f"Article generated ({len(article)} characters)")
             return article
