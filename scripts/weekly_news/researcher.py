@@ -60,7 +60,7 @@ class CoworkingResearcher:
         """Initialize researcher with API clients."""
         # Configure Gemini
         genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-        self.gemini_model = genai.GenerativeModel('gemini-2.0-flash-exp')
+        self.gemini_model = genai.GenerativeModel('gemini-3-flash-preview')
 
         self.tavily_client = TavilyClient(
             api_key=os.getenv("TAVILY_API_KEY")
@@ -154,33 +154,40 @@ class CoworkingResearcher:
         Returns:
             Article text in markdown format
         """
-        logger.info("Generating article with Google Gemini 2.0 Flash...")
+        logger.info("Generating article with Google Gemini 3.0 Flash...")
 
-        prompt = f"""あなたはコワーキングスペース業界の週刊ニュースライターです。
-最新の業界トレンドを3-5個のニュース項目にまとめ、簡潔で読みやすいニュースダイジェストを作成してください。
+        # 週番号から日付を取得（その週の金曜日）
+        from datetime import datetime
+        now = datetime.now()
+        date_str = now.strftime("%Y年%m月%d日")
+
+        prompt = f"""過去1週間の「コワーキングスペース」に関する日本の最新ニュースを3〜5件調査し、note投稿用の記事（Markdown形式）を作成してください。
 
 【記事の要件】
-- 総文字数: {TARGET_CHAR_COUNT_MIN}-{TARGET_CHAR_COUNT_MAX}文字
-- ニュース項目数: {NEWS_ITEMS_MIN}-{NEWS_ITEMS_MAX}個
-- 各ニュース: 200-400文字
-- トーン: 客観的、情報的、プロフェッショナル
-- 形式: マークダウン
+・タイトル：「【週刊】コワーキングスペース通信（{date_str}号）」形式
+・構成：導入 → ニュース紹介（カテゴリ別） → まとめ → ハッシュタグ
+・情報源：各ニュースの末尾に「記事タイトル（URL）」を必ず記載
+・ハッシュタグ：#コワーキングスペース #働き方改革 #リモートワーク #最新ニュース
+・形式：noteにコピー＆ペーストできるMarkdown形式で出力。生成AIの記事とはわからないように、絵文字は入れないで。
 
-【構成】
-1. 導入部（今週の概要、50-100文字）
-2. ニュース項目（### 見出しで各ニュース）
-   - 各ニュースには出典URLを記載
-3. まとめ（50-100文字）
+【記事構成の詳細】
+1. タイトル（# 見出し）：【週刊】コワーキングスペース通信（{date_str}号）
+2. 導入部：今週のコワーキングスペース業界の動向を簡潔に紹介（100-150文字）
+3. ニュース紹介：カテゴリ別に3-5件のニュースを紹介
+   - 各ニュースは ## 見出しで記載
+   - カテゴリ例：新規開業、サービス拡充、業界動向、イベント情報など
+   - 各ニュース200-400文字
+   - 末尾に必ず出典を記載：「参考：記事タイトル（URL）」
+4. まとめ：今週のトピックの総括（100-150文字）
+5. ハッシュタグ：#コワーキングスペース #働き方改革 #リモートワーク #最新ニュース
 
 【注意事項】
-- タイトル（# 見出し）は含めないでください（ファイル名がタイトルになります）
-- ニュース項目は重要度順に並べてください
-- 日本語と英語のニュースをバランスよく含めてください
-- 出典URLは必ず含めてください
+- 絵文字は一切使用しないこと
+- 自然な文体で、AIが書いたとわからないようにすること
+- 客観的かつプロフェッショナルなトーン
+- 日本国内のニュースを優先すること
 
 ---
-
-{week_number}の週刊コワーキングスペースニュースを作成してください。
 
 以下のリサーチデータを基に、重要度の高い3-5個のニュースを選定し、記事を執筆してください。
 
@@ -188,8 +195,7 @@ class CoworkingResearcher:
 {self._format_research_data(research_data)}
 
 【出力形式】
-マークダウン形式で出力してください。
-タイトル（# 見出し）は含めないでください。
+上記の構成に従って、Markdown形式で出力してください。
 """
 
         try:
@@ -246,16 +252,16 @@ URL: {result.url}
             ValidationResult object
         """
         char_count = len(article_md)
-        news_items = article_md.count("###")
+        news_items = article_md.count("## ")  # カテゴリ見出しをカウント
 
         errors = []
         warnings = []
 
-        # Check character count
-        if char_count < TARGET_CHAR_COUNT_MIN:
-            errors.append(f"Article too short: {char_count} chars (min {TARGET_CHAR_COUNT_MIN})")
-        elif char_count > TARGET_CHAR_COUNT_MAX:
-            warnings.append(f"Article too long: {char_count} chars (max {TARGET_CHAR_COUNT_MAX})")
+        # Check character count (タイトル・ハッシュタグ含め緩めの基準)
+        if char_count < 1000:
+            errors.append(f"Article too short: {char_count} chars (min 1000)")
+        elif char_count > 3500:
+            warnings.append(f"Article too long: {char_count} chars (max 3500)")
 
         # Check news item count
         if news_items < NEWS_ITEMS_MIN:
@@ -263,10 +269,15 @@ URL: {result.url}
         elif news_items > NEWS_ITEMS_MAX:
             warnings.append(f"Too many news items: {news_items} (max {NEWS_ITEMS_MAX})")
 
-        # Check for introduction
-        lines = article_md.strip().split("\n")
-        if not lines[0] or len(lines[0]) < 20:
-            warnings.append("Missing or short introduction section")
+        # Check for required elements
+        if "【週刊】コワーキングスペース通信" not in article_md:
+            errors.append("Missing required title format")
+
+        if "#コワーキングスペース" not in article_md:
+            warnings.append("Missing required hashtags")
+
+        if "参考：" not in article_md and "参照：" not in article_md:
+            warnings.append("Missing source citations")
 
         logger.info(f"Validation: {char_count} chars, {news_items} items")
 
