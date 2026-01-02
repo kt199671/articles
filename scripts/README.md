@@ -10,12 +10,19 @@ scripts/
 │   ├── __init__.py
 │   ├── main.py              # メインオーケストレーター
 │   ├── researcher.py        # AI リサーチ・執筆モジュール
-│   ├── note_api.py          # note.com API クライアント
+│   ├── note_api.py          # note.com API クライアント (Selenium使用)
 │   ├── markdown_utils.py    # Markdown → HTML 変換
 │   └── config.py            # 設定定数
 ├── requirements.txt         # Python 依存関係
 └── README.md               # このファイル
 ```
+
+## 🔑 認証方式
+
+note.com へのログインには **Selenium WebDriver** を使用します:
+- メールアドレス・パスワードで自動ログイン
+- セッションクッキーを自動取得
+- 手動でのクッキー更新は不要
 
 ## 🚀 初期セットアップ
 
@@ -66,6 +73,14 @@ source venv/bin/activate  # Windows: venv\Scripts\activate
 
 # 依存関係インストール
 pip install -r scripts/requirements.txt
+
+# Chrome/Chromium のインストール (必須)
+# Ubuntu/Debian:
+sudo apt-get update && sudo apt-get install -y chromium-browser chromium-chromedriver
+
+# macOS (Homebrew):
+brew install --cask google-chrome
+brew install chromedriver
 ```
 
 ### 環境変数設定
@@ -136,7 +151,8 @@ python -m scripts.weekly_news.main
 ## 🔐 セキュリティ
 
 - パスワードは GitHub Secrets で暗号化保管
-- note.com へは毎回新規ログインでセッション取得
+- note.com へは Selenium で毎回新規ログイン
+- セッションクッキーは実行時のみメモリ上に保持
 - API キーは環境変数経由でのみアクセス
 
 ## 📝 運用・保守

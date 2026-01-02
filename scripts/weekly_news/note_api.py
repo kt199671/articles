@@ -1,16 +1,18 @@
-"""note.com API client with email/password authentication."""
+"""note.com API client with Selenium-based authentication."""
 
 import os
 import logging
+import time
 import requests
-from bs4 import BeautifulSoup
-from typing import Optional
+from typing import Optional, Dict
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.chrome.options import Options
 
 from .config import (
     NOTE_BASE_URL,
-    NOTE_LOGIN_ENDPOINT,
-    NOTE_NOTES_ENDPOINT,
-    NOTE_DASHBOARD_URL,
     NOTE_API_TIMEOUT,
 )
 from .markdown_utils import markdown_to_note_html
@@ -38,7 +40,7 @@ class NoteAPIClient:
     """
     Client for interacting with note.com API.
 
-    Handles authentication via email/password and draft creation.
+    Uses Selenium for authentication to obtain cookies.
     """
 
     def __init__(self, email: Optional[str] = None, password: Optional[str] = None):
@@ -63,105 +65,99 @@ class NoteAPIClient:
             "Accept-Language": "ja,en-US;q=0.9,en;q=0.8",
         })
 
-        self._csrf_token: Optional[str] = None
+        self._cookies: Optional[Dict[str, str]] = None
         self._logged_in = False
+
+    def _setup_driver(self) -> webdriver.Chrome:
+        """
+        Setup Chrome WebDriver with headless options.
+
+        Returns:
+            Configured WebDriver instance
+        """
+        chrome_options = Options()
+        chrome_options.add_argument("--headless")
+        chrome_options.add_argument("--no-sandbox")
+        chrome_options.add_argument("--disable-dev-shm-usage")
+        chrome_options.add_argument("--disable-gpu")
+        chrome_options.add_argument("--window-size=1920,1080")
+        chrome_options.add_argument(
+            "user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        )
+
+        driver = webdriver.Chrome(options=chrome_options)
+        return driver
 
     def login(self) -> None:
         """
-        Login to note.com using email and password.
+        Login to note.com using Selenium and obtain cookies.
 
         Raises:
             LoginError: If login fails
         """
-        logger.info("Logging in to note.com...")
+        logger.info("Logging in to note.com with Selenium...")
 
-        # First, get CSRF token from login page
+        driver = None
         try:
-            response = self.session.get(
-                f"{NOTE_BASE_URL}/login",
-                timeout=NOTE_API_TIMEOUT
+            driver = self._setup_driver()
+
+            # Navigate to login page
+            driver.get(f"{NOTE_BASE_URL}/login")
+            logger.info("Navigated to login page")
+
+            # Wait for email input field
+            email_input = WebDriverWait(driver, 10).until(
+                EC.presence_of_element_located((By.NAME, "email"))
             )
-            response.raise_for_status()
+            email_input.send_keys(self.email)
+            logger.info("Entered email")
 
-            soup = BeautifulSoup(response.text, "html.parser")
-            csrf_meta = soup.find("meta", {"name": "csrf-token"})
+            # Enter password
+            password_input = driver.find_element(By.NAME, "password")
+            password_input.send_keys(self.password)
+            logger.info("Entered password")
 
-            if not csrf_meta:
-                raise LoginError("Could not retrieve CSRF token from login page")
+            # Click login button
+            login_button = driver.find_element(By.XPATH, "//button[@type='submit']")
+            login_button.click()
+            logger.info("Clicked login button")
 
-            csrf_token = csrf_meta.get("content")
+            # Wait for login to complete (wait for redirect away from login page)
+            time.sleep(5)
 
-        except requests.exceptions.RequestException as e:
-            raise LoginError(f"Failed to access login page: {e}")
+            # Check if login was successful by checking URL
+            current_url = driver.current_url
+            if "login" in current_url:
+                raise LoginError("Login failed - still on login page")
 
-        # Send login request
-        login_payload = {
-            "emailOrUrlname": self.email,
-            "password": self.password,
-        }
+            # Get cookies
+            cookies = driver.get_cookies()
+            self._cookies = {cookie['name']: cookie['value'] for cookie in cookies}
 
-        try:
-            response = self.session.post(
-                NOTE_LOGIN_ENDPOINT,
-                json=login_payload,
-                headers={"X-CSRF-Token": csrf_token},
-                timeout=NOTE_API_TIMEOUT
-            )
+            # Check for note_session cookie
+            if 'note_session' not in self._cookies:
+                raise LoginError("Login appeared successful but no session cookie found")
 
-            if response.status_code == 401:
-                raise LoginError("Invalid email or password")
+            # Set cookies in requests session
+            for name, value in self._cookies.items():
+                self.session.cookies.set(name, value)
 
-            if response.status_code == 422:
-                error_msg = response.json().get("message", "Validation error")
-                raise LoginError(f"Login validation error: {error_msg}")
-
-            response.raise_for_status()
-
-            # Check if login was successful by verifying session cookie
-            if "note_session" not in self.session.cookies:
-                raise LoginError("Login appeared successful but no session cookie received")
-
-            logger.info("Successfully logged in to note.com")
+            logger.info("Successfully logged in and obtained cookies")
             self._logged_in = True
 
-        except requests.exceptions.RequestException as e:
-            raise LoginError(f"Login request failed: {e}")
+        except Exception as e:
+            logger.error(f"Login failed: {e}")
+            raise LoginError(f"Failed to login with Selenium: {e}")
+
+        finally:
+            if driver:
+                driver.quit()
 
     def _ensure_logged_in(self) -> None:
         """Ensure user is logged in, login if necessary."""
         if not self._logged_in:
             self.login()
-
-    def _get_csrf_token(self) -> str:
-        """
-        Get CSRF token from note.com dashboard.
-
-        Returns:
-            CSRF token string
-
-        Raises:
-            NoteAPIError: If CSRF token cannot be retrieved
-        """
-        if self._csrf_token:
-            return self._csrf_token
-
-        self._ensure_logged_in()
-
-        try:
-            response = self.session.get(NOTE_DASHBOARD_URL, timeout=NOTE_API_TIMEOUT)
-            response.raise_for_status()
-
-            soup = BeautifulSoup(response.text, "html.parser")
-            csrf_meta = soup.find("meta", {"name": "csrf-token"})
-
-            if not csrf_meta:
-                raise NoteAPIError("Could not retrieve CSRF token from dashboard")
-
-            self._csrf_token = csrf_meta.get("content")
-            return self._csrf_token
-
-        except requests.exceptions.RequestException as e:
-            raise NoteAPIError(f"Failed to retrieve CSRF token: {e}")
 
     def create_draft(
         self,
@@ -189,38 +185,24 @@ class NoteAPIClient:
         # Convert markdown to HTML
         html_content = markdown_to_note_html(content_markdown)
 
-        # Get CSRF token
-        csrf_token = self._get_csrf_token()
-
         # Prepare payload
         payload = {
-            "note": {
-                "name": title,
-                "body": html_content,
-                "status": "draft",  # Always create as draft
-                "publish_at": None,
-                "eyecatch": None,
-            }
+            "body": html_content,
+            "name": title,
+            "template_key": None,
         }
 
-        # Add magazine_id if provided
-        if magazine_id:
-            payload["note"]["magazine_id"] = magazine_id
-
-        # Send request
+        # Try to create article
         try:
             response = self.session.post(
-                NOTE_NOTES_ENDPOINT,
+                f"{NOTE_BASE_URL}/api/v1/text_notes",
                 json=payload,
-                headers={
-                    "X-CSRF-Token": csrf_token,
-                    "Content-Type": "application/json",
-                },
+                headers={"Content-Type": "application/json"},
                 timeout=NOTE_API_TIMEOUT
             )
 
             if response.status_code == 401:
-                raise LoginError("Session expired, please login again")
+                raise LoginError("Session expired")
 
             if response.status_code == 422:
                 error_data = response.json()
@@ -230,22 +212,69 @@ class NoteAPIClient:
             response.raise_for_status()
 
             data = response.json()
-            note_data = data.get("data", {}).get("note", {})
-            note_url = note_data.get("note_url")
+            article_id = data.get("data", {}).get("id")
+            article_key = data.get("data", {}).get("key")
 
-            if not note_url:
-                # Fallback: construct URL from note key
-                note_key = note_data.get("key")
-                if note_key:
-                    note_url = f"{NOTE_BASE_URL}/notes/{note_key}"
-                else:
-                    raise NoteAPIError("Could not determine note URL from response")
+            if not article_id:
+                raise NoteAPIError("Could not get article ID from response")
+
+            logger.info(f"Article created with ID: {article_id}")
+
+            # Update to draft status and add to magazine if needed
+            if magazine_id or True:  # Always update to set draft status
+                self._update_article_draft(article_id, title, content_markdown, magazine_id)
+
+            # Construct URL
+            note_url = f"{NOTE_BASE_URL}/notes/{article_key}" if article_key else f"{NOTE_BASE_URL}"
 
             logger.info(f"Draft created successfully: {note_url}")
             return note_url
 
         except requests.exceptions.RequestException as e:
             raise NoteAPIError(f"Failed to create draft: {e}")
+
+    def _update_article_draft(
+        self,
+        article_id: str,
+        title: str,
+        content_markdown: str,
+        magazine_id: Optional[str] = None
+    ) -> None:
+        """
+        Update article to draft status.
+
+        Args:
+            article_id: Article ID
+            title: Article title
+            content_markdown: Article content
+            magazine_id: Magazine ID (optional)
+        """
+        html_content = markdown_to_note_html(content_markdown)
+
+        payload = {
+            "body": html_content,
+            "name": title,
+            "status": "draft",
+        }
+
+        if magazine_id:
+            payload["magazine_id"] = magazine_id
+
+        try:
+            response = self.session.put(
+                f"{NOTE_BASE_URL}/api/v1/text_notes/{article_id}",
+                json=payload,
+                headers={"Content-Type": "application/json"},
+                timeout=NOTE_API_TIMEOUT
+            )
+
+            if response.status_code == 200:
+                logger.info("Article updated to draft status")
+            else:
+                logger.warning(f"Failed to update article status: {response.status_code}")
+
+        except Exception as e:
+            logger.warning(f"Failed to update article to draft: {e}")
 
     def test_connection(self) -> bool:
         """
@@ -259,7 +288,6 @@ class NoteAPIClient:
         """
         try:
             self.login()
-            csrf_token = self._get_csrf_token()
             logger.info("Connection test successful")
             return True
         except Exception as e:
