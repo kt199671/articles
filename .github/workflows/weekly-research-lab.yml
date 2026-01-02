@@ -1,18 +1,18 @@
-name: Weekly Coworking Space News
+name: Weekly Coworking Research Lab
 
 on:
   schedule:
-    # Runs every Friday at 00:00 UTC (09:00 JST)
-    - cron: '0 0 * * 5'
+    # Runs every Wednesday at 00:00 UTC (09:00 JST)
+    - cron: '0 0 * * 3'
   workflow_dispatch:  # Manual trigger for testing
 
 permissions:
   contents: write  # Required for committing generated articles
 
 jobs:
-  generate-weekly-news:
+  generate-research-article:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
 
     steps:
       - name: Checkout repository
@@ -36,21 +36,21 @@ jobs:
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
 
-      - name: Generate weekly news article
+      - name: Generate research article
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
         run: |
-          python -m scripts.weekly_news.main
+          python -m scripts.research_lab.main
 
       - name: Commit and push changes
         run: |
-          git add note/magazine/週刊コワーキングスペース/
+          git add note/magazine/コワーキングの場づくり研究室/
           if git diff --staged --quiet; then
             echo "No changes to commit"
           else
             WEEK_NUM=$(python -c "from datetime import datetime; print(datetime.now().strftime('%Y年%V週'))")
-            git commit -m "feat: add weekly coworking news for ${WEEK_NUM}
+            git commit -m "feat: add research lab article for ${WEEK_NUM}
 
             🤖 Generated with GitHub Actions
 
@@ -64,7 +64,7 @@ jobs:
         with:
           name: error-logs-${{ github.run_id }}
           path: |
-            scripts/weekly_news/*.log
+            scripts/research_lab/*.log
             *.log
           retention-days: 7
           if-no-files-found: ignore

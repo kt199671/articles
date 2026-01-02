@@ -1,4 +1,4 @@
-"""Main orchestrator for weekly coworking space news automation."""
+"""Main orchestrator for coworking research lab automation."""
 
 import os
 import sys
@@ -8,7 +8,7 @@ from datetime import datetime
 from pathlib import Path
 
 from .config import MAGAZINE_PATH, WEEK_FORMAT, LOG_FORMAT, LOG_LEVEL
-from .researcher import CoworkingResearcher
+from .researcher import CoworkingResearchLabWriter
 
 
 # Setup logging
@@ -108,7 +108,7 @@ def main() -> int:
     """
     try:
         # 1. Validate environment
-        logger.info("Starting weekly coworking space news automation...")
+        logger.info("Starting coworking research lab automation...")
         validate_environment()
 
         # 2. Determine week number and file path
@@ -125,36 +125,36 @@ def main() -> int:
             return 0
 
         # 4. Research coworking trends
-        logger.info("Step 1: Gathering coworking space trends...")
-        researcher = CoworkingResearcher()
+        logger.info("Step 1: Gathering research data...")
+        writer = CoworkingResearchLabWriter()
 
         try:
-            research_data = researcher.gather_weekly_trends(days=7)
+            research_data = writer.gather_research_data(days=30)
         except Exception as e:
-            raise RetryableError(f"Failed to gather trends: {e}")
+            raise RetryableError(f"Failed to gather research data: {e}")
 
         if research_data.total_results == 0:
             logger.warning("No research results found. Generating article anyway...")
 
         # 5. Generate article
-        logger.info("Step 2: Generating article with AI...")
+        logger.info("Step 2: Generating academic article with AI...")
 
         try:
-            article_md = researcher.generate_article(research_data, week_number)
+            article_md = writer.generate_article(research_data, week_number)
         except Exception as e:
             raise RetryableError(f"Failed to generate article: {e}")
 
         # 6. Validate article
         logger.info("Step 3: Validating article...")
-        validation = researcher.validate_article(article_md)
+        validation = writer.validate_article(article_md)
 
         if not validation.valid:
             logger.warning(f"Article validation failed: {validation.errors}")
             logger.info("Attempting to regenerate article...")
 
             try:
-                article_md = researcher.generate_article(research_data, week_number)
-                validation = researcher.validate_article(article_md)
+                article_md = writer.generate_article(research_data, week_number)
+                validation = writer.validate_article(article_md)
 
                 if not validation.valid:
                     logger.warning("Second validation also failed, proceeding anyway")
@@ -196,7 +196,7 @@ def main() -> int:
 def cli():
     """Command line interface."""
     parser = argparse.ArgumentParser(
-        description="Weekly Coworking Space News Automation"
+        description="Coworking Research Lab Automation"
     )
 
     args = parser.parse_args()

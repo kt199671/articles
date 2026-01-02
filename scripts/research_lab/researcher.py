@@ -1,4 +1,4 @@
-"""AI-powered research and article generation for coworking space news."""
+"""AI-powered research article generation for coworking space research."""
 
 import os
 import logging
@@ -13,8 +13,8 @@ from .config import (
     SEARCH_QUERIES,
     TARGET_CHAR_COUNT_MIN,
     TARGET_CHAR_COUNT_MAX,
-    NEWS_ITEMS_MIN,
-    NEWS_ITEMS_MAX,
+    SECTIONS_MIN,
+    SECTIONS_MAX,
     GEMINI_TIMEOUT,
     TAVILY_TIMEOUT,
 )
@@ -49,15 +49,15 @@ class ValidationResult:
         self.warnings = warnings
 
 
-class CoworkingResearcher:
+class CoworkingResearchLabWriter:
     """
-    AI-powered researcher for coworking space industry trends.
+    AI-powered writer for academic-style coworking space research articles.
 
-    Uses Tavily for web search and Google Gemini for article generation.
+    Uses Tavily for research and Google Gemini for article generation.
     """
 
     def __init__(self):
-        """Initialize researcher with API clients."""
+        """Initialize writer with API clients."""
         # Configure Gemini
         genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
         self.gemini_model = genai.GenerativeModel('gemini-3-flash-preview')
@@ -66,17 +66,17 @@ class CoworkingResearcher:
             api_key=os.getenv("TAVILY_API_KEY")
         )
 
-    def gather_weekly_trends(self, days: int = 7) -> ResearchData:
+    def gather_research_data(self, days: int = 30) -> ResearchData:
         """
-        Search for latest coworking space trends using Tavily.
+        Search for latest coworking space research using Tavily.
 
         Args:
-            days: Number of days to look back (default: 7)
+            days: Number of days to look back (default: 30 for research)
 
         Returns:
             ResearchData object with aggregated results
         """
-        logger.info(f"Gathering trends from the past {days} days...")
+        logger.info(f"Gathering research data from the past {days} days...")
 
         all_results: List[SearchResult] = []
 
@@ -86,7 +86,7 @@ class CoworkingResearcher:
             try:
                 response = self.tavily_client.search(
                     query=query,
-                    max_results=5,
+                    max_results=7,
                     days=days,
                     search_depth="advanced"
                 )
@@ -112,8 +112,8 @@ class CoworkingResearcher:
         # Sort by score (relevance)
         unique_results.sort(key=lambda x: x.score, reverse=True)
 
-        # Take top 15 results
-        top_results = unique_results[:15]
+        # Take top 20 results for research depth
+        top_results = unique_results[:20]
 
         logger.info(f"Found {len(top_results)} unique results from {len(SEARCH_QUERIES)} queries")
 
@@ -145,57 +145,77 @@ class CoworkingResearcher:
 
     def generate_article(self, research_data: ResearchData, week_number: str) -> str:
         """
-        Generate article using Google Gemini based on research data.
+        Generate academic-style article using Google Gemini based on research data.
 
         Args:
-            research_data: Research data from gather_weekly_trends
+            research_data: Research data from gather_research_data
             week_number: Week number string (e.g., "2026年01週")
 
         Returns:
             Article text in markdown format
         """
-        logger.info("Generating article with Google Gemini 3.0 Flash...")
+        logger.info("Generating academic research article with Google Gemini 3.0 Flash...")
 
-        # 週番号から日付を取得（その週の金曜日）
-        from datetime import datetime
-        now = datetime.now()
-        date_str = now.strftime("%Y年%m月%d日")
+        prompt = f"""あなたはコワーキングスペースに関する専門研究者です。過去1ヶ月の最新研究・トレンド・調査結果を基に、note投稿用の学術的な研究記事（Markdown形式）を執筆してください。
 
-        prompt = f"""過去1週間の「コワーキングスペース」に関する日本の最新ニュースを3〜5件調査し、note投稿用の記事（Markdown形式）を作成してください。
+【記事の特徴】
+・対象マガジン：「コワーキングの場づくり研究室」
+・文字数：5,000〜8,000文字
+・トーン：学術的・専門的、しかし読みやすい
+・構成：序論・本論（5-7章）・結論
+・参考文献：各章で言及した研究や記事の出典を明記
 
-【記事の要件】
-・タイトル：「【週刊】コワーキングスペース通信（{date_str}号）」形式
-・構成：導入 → ニュース紹介（カテゴリ別） → まとめ → ハッシュタグ
-・情報源：各ニュースの末尾に「記事タイトル（URL）」を必ず記載
-・ハッシュタグ：#コワーキングスペース #働き方改革 #リモートワーク #最新ニュース
-・形式：noteにコピー＆ペーストできるMarkdown形式で出力。生成AIの記事とはわからないように、絵文字は入れないで。
+【執筆スタイルのガイドライン】
+1. 客観的なデータ・研究に基づく論述
+2. 概念の深い掘り下げ（サードプレイス、ウェルビーイング、ハイブリッドワークなど）
+3. 社会学・心理学・経営学などの学際的アプローチ
+4. 実践的な示唆・提言を含む
+5. 絵文字は一切使用しない
+6. 自然な文体で、AIが書いたとわからないようにする
 
-【記事構成の詳細】
-1. タイトル（# 見出し）：【週刊】コワーキングスペース通信（{date_str}号）
-2. 導入部：今週のコワーキングスペース業界の動向を簡潔に紹介（100-150文字）
-3. ニュース紹介：カテゴリ別に3-5件のニュースを紹介
-   - 各ニュースは ## 見出しで記載
-   - カテゴリ例：新規開業、サービス拡充、業界動向、イベント情報など
-   - 各ニュース200-400文字
-   - 末尾に必ず出典を記載：「参考：記事タイトル（URL）」
-4. まとめ：今週のトピックの総括（100-150文字）
-5. ハッシュタグ：#コワーキングスペース #働き方改革 #リモートワーク #最新ニュース
+【記事構成の例】
+```
+# [タイトル]：コワーキングスペースに関する学術的・実践的なテーマ
 
-【注意事項】
-- 絵文字は一切使用しないこと
-- 自然な文体で、AIが書いたとわからないようにすること
-- 客観的かつプロフェッショナルなトーン
-- 日本国内のニュースを優先すること
+## 1. はじめに：問題提起
+- 現代社会における働き方の変化
+- 本記事で扱うテーマの重要性
+
+## 2-7. 本論（各章2-3の小見出し）
+例：
+- サードプレイスの概念と現代的意義
+- ハイブリッドワーク環境におけるウェルビーイング
+- コミュニティ形成のメカニズム
+- 空間デザインと生産性の関係
+- グローバルトレンドと日本の状況
+- 実践事例の分析
+
+## 8. 結論：まとめと提言
+- 主要な発見のまとめ
+- 運営者・利用者・社会への提言
+
+## 参考文献
+- 各章で言及した研究・記事・データソースのリスト
+```
+
+【重要な注意事項】
+- 既存の研究記事のように深い考察を行う
+- 単なるニュースまとめではなく、テーマを掘り下げた論考とする
+- 具体的なデータ・統計・研究結果を積極的に引用する
+- 各主張には根拠を示す
+- 絵文字は絶対に使用しない
+- 自然で説得力のある文章構成
 
 ---
 
-以下のリサーチデータを基に、重要度の高い3-5個のニュースを選定し、記事を執筆してください。
+以下のリサーチデータを基に、最も重要かつ興味深いテーマを1つ選定し、それについての学術的研究記事を執筆してください。
+複数のデータソースを統合し、独自の視点で分析・考察を加えてください。
 
 【リサーチデータ】
 {self._format_research_data(research_data)}
 
 【出力形式】
-上記の構成に従って、Markdown形式で出力してください。
+上記の構成に従って、Markdown形式で学術的な研究記事を出力してください。
 """
 
         try:
@@ -203,7 +223,7 @@ class CoworkingResearcher:
                 prompt,
                 generation_config={
                     "temperature": 0.7,
-                    "max_output_tokens": 3000,
+                    "max_output_tokens": 8000,
                 }
             )
 
@@ -230,13 +250,13 @@ class CoworkingResearcher:
 
         for i, result in enumerate(research_data.results, 1):
             formatted.append(f"""
-【ニュース {i}】
+【データソース {i}】
 タイトル: {result.title}
 URL: {result.url}
 公開日: {result.published_date}
 関連度: {result.score:.2f}
 内容:
-{result.content[:500]}...
+{result.content[:800]}...
 """)
 
         return "\n".join(formatted)
@@ -252,34 +272,37 @@ URL: {result.url}
             ValidationResult object
         """
         char_count = len(article_md)
-        news_items = article_md.count("## ")  # カテゴリ見出しをカウント
+        sections = article_md.count("## ")  # Main sections
 
         errors = []
         warnings = []
 
-        # Check character count (タイトル・ハッシュタグ含め緩めの基準)
-        if char_count < 1000:
-            errors.append(f"Article too short: {char_count} chars (min 1000)")
-        elif char_count > 3500:
-            warnings.append(f"Article too long: {char_count} chars (max 3500)")
+        # Check character count
+        if char_count < TARGET_CHAR_COUNT_MIN:
+            errors.append(f"Article too short: {char_count} chars (min {TARGET_CHAR_COUNT_MIN})")
+        elif char_count > TARGET_CHAR_COUNT_MAX:
+            warnings.append(f"Article too long: {char_count} chars (max {TARGET_CHAR_COUNT_MAX})")
 
-        # Check news item count
-        if news_items < NEWS_ITEMS_MIN:
-            errors.append(f"Too few news items: {news_items} (min {NEWS_ITEMS_MIN})")
-        elif news_items > NEWS_ITEMS_MAX:
-            warnings.append(f"Too many news items: {news_items} (max {NEWS_ITEMS_MAX})")
+        # Check section count
+        if sections < SECTIONS_MIN:
+            errors.append(f"Too few sections: {sections} (min {SECTIONS_MIN})")
+        elif sections > SECTIONS_MAX + 2:  # Allow some flexibility
+            warnings.append(f"Many sections: {sections} (recommended max {SECTIONS_MAX})")
 
         # Check for required elements
-        if "【週刊】コワーキングスペース通信" not in article_md:
-            errors.append("Missing required title format")
+        if "# " not in article_md:
+            errors.append("Missing main title (# heading)")
 
-        if "#コワーキングスペース" not in article_md:
-            warnings.append("Missing required hashtags")
+        if "はじめに" not in article_md and "序論" not in article_md:
+            warnings.append("Missing introduction section")
 
-        if "参考：" not in article_md and "参照：" not in article_md:
-            warnings.append("Missing source citations")
+        if "結論" not in article_md and "まとめ" not in article_md:
+            warnings.append("Missing conclusion section")
 
-        logger.info(f"Validation: {char_count} chars, {news_items} items")
+        if "参考" not in article_md:
+            warnings.append("Missing references section")
+
+        logger.info(f"Validation: {char_count} chars, {sections} sections")
 
         if errors:
             logger.warning(f"Validation errors: {errors}")
