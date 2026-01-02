@@ -1,5 +1,5 @@
 # AI & Search
-openai==1.10.0
+google-generativeai==0.3.2
 tavily-python==0.3.0
 
 # HTTP & API
