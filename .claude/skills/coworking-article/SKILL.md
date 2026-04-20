@@ -14,7 +14,7 @@
 ## 記事の保存先
 
 ```
-/home/kentaro/my-project/articles/note/magazine/コワーキングの場づくり研究室/
+/home/kentaro/src/kentaro/articles/note/magazine/コワーキングの場づくり研究室/
 ```
 
 ## 作成フロー
